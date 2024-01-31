@@ -5,11 +5,11 @@ OutputLevel.default = .error
 
 enum Config {
   static let libssh2Origin = "https://github.com/libssh2/libssh2.git"
-  static let libssh2Tag = "libssh2-1.9.0"
-  static let libssh2Version = "1.9.0"
+  static let libssh2Tag = "libssh2-1.11.0"
+  static let libssh2Version = "1.11.0"
   
-  static let opensslLibsURL       = "https://github.com/blinksh/openssl-apple/releases/download/v1.1.1k/openssl-libs.zip"
-  static let opensslFrameworksURL = "https://github.com/blinksh/openssl-apple/releases/download/v1.1.1k/openssl-dynamic.frameworks.zip"
+  static let opensslLibsURL       = "https://github.com/holzschu/openssl-apple/releases/download/v1.1.1w/openssl-libs.zip"
+  static let opensslFrameworksURL = "https://github.com/holzschu/openssl-apple/releases/download/v1.1.1w/openssl-dynamic.frameworks.zip"
   
   static let frameworkName = "libssh2"
   
