@@ -75,7 +75,6 @@ for p in Config.platforms {
     
     print(env)
     print(arch)
-    fputs("Debugging\n", stderr)
     
     if p == .Catalyst {
       env["LDFLAGS"] = "\(ldflags) -target \(arch)-apple-ios14.0-macabi"
@@ -90,9 +89,6 @@ for p in Config.platforms {
     try? sh("rm -rf \(libPath)")
     try? mkdir(libPath)
 
-    try fputs(
-      "Command: cmake -Hlibssh2 -B\(binPath) -GXcode -DCMAKE_TOOLCHAIN_FILE=\(toolchain) -DCMAKE_C_COMPILER=\(p.ccPath()) -DCMAKE_OSX_ARCHITECTURES=\(arch) -DCMAKE_OSX_DEPLOYMENT_TARGET=\(p.deploymentTarget) -DBUILD_SHARED_LIBS=OFF -DWITH_EXAMPLES=OFF -DCMAKE_BUILD_TYPE=Release -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO -DCMAKE_SYSTEM_PROCESSOR=\(arch) -DCMAKE_INSTALL_PREFIX=\(libPath) -DBUILD_EXAMPLES=NO -DBUILD_TESTING=NO -DENABLE_ZLIB_COMPRESSION=YES -DENABLE_CRYPT_NONE=YES -DENABLE_MAC_NONE=YES\n", stderr)
-
     try sh(
       "cmake",
       "-Hlibssh2 -B\(binPath)",
@@ -106,6 +102,7 @@ for p in Config.platforms {
       "-DWITH_EXAMPLES=OFF",
       "-DCMAKE_BUILD_TYPE=Release",
       "-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO",
+      "-DCMAKE_SYSTEM_NAME=\"Darwin\"", 
       "-DCMAKE_SYSTEM_PROCESSOR=\(arch)",
 //      "-DCMAKE_C_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0 -isystem \(try p.sdkPath())/System/iOSSupport/usr/include -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/System/Library/Frameworks\"",
 //      "-DCMAKE_CXX_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0\"",
