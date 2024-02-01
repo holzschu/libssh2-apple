@@ -75,7 +75,7 @@ for p in Config.platforms {
     
     print(env)
     print(arch)
-    print("Debugging")
+    fputs("Debugging\n", stderr)
     
     if p == .Catalyst {
       env["LDFLAGS"] = "\(ldflags) -target \(arch)-apple-ios14.0-macabi"
@@ -90,7 +90,7 @@ for p in Config.platforms {
     try? sh("rm -rf \(libPath)")
     try? mkdir(libPath)
 
-    try print(
+    try fputs(
       "Command: cmake",
       "-Hlibssh2 -B\(binPath)",
       "-GXcode",
@@ -111,7 +111,7 @@ for p in Config.platforms {
       "-DBUILD_TESTING=NO",
       "-DENABLE_ZLIB_COMPRESSION=YES",
       "-DENABLE_CRYPT_NONE=YES",
-      "-DENABLE_MAC_NONE=YES")
+      "-DENABLE_MAC_NONE=YES\n", stderr)
 
     try sh(
       "cmake",
