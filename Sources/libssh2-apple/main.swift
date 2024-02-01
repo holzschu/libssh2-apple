@@ -59,6 +59,7 @@ for p in Config.platforms {
   var env = try [
     "PATH": ProcessInfo.processInfo.environment["PATH"] ?? "",
     "APPLE_PLATFORM": p.sdk,
+    "ZLIB_ROOT": "\(p.sdkPath())/usr",
     "APPLE_SDK_PATH": p.sdkPath(),
     "SECOND_FIND_ROOT_PATH": "\(opensslLibsRoot + p.name)/openssl",
     "LDFLAGS": ldflags,
@@ -103,6 +104,7 @@ for p in Config.platforms {
       "-DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO",
       "-DCMAKE_SYSTEM_NAME=Darwin", 
       "-DCMAKE_SYSTEM_PROCESSOR=\(arch)",
+      "-DCMAKE_POLICY_DEFAULT_CMP0074=NEW",
 //      "-DCMAKE_C_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0 -isystem \(try p.sdkPath())/System/iOSSupport/usr/include -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/System/Library/Frameworks\"",
 //      "-DCMAKE_CXX_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0\"",
 //      "-DCMAKE_LDFLAGS=\"-target x86_64-apple-ios13.0-macabi  -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/maccatalyst  -L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/usr/lib -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/System/Library/Frameworks \"",
