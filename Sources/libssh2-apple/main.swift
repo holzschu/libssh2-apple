@@ -74,6 +74,8 @@ for p in Config.platforms {
   for arch in p.archs {
     
     print(env)
+    print(arch)
+    print("Debugging")
     
     if p == .Catalyst {
       env["LDFLAGS"] = "\(ldflags) -target \(arch)-apple-ios14.0-macabi"
@@ -88,8 +90,8 @@ for p in Config.platforms {
     try? sh("rm -rf \(libPath)")
     try? mkdir(libPath)
 
-    try sh(
-      "echo Command: cmake",
+    try print(
+      "Command: cmake",
       "-Hlibssh2 -B\(binPath)",
       "-GXcode",
       "-DCMAKE_TOOLCHAIN_FILE=\(toolchain)",
