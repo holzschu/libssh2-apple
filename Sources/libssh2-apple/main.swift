@@ -93,7 +93,6 @@ for p in Config.platforms {
       "cmake",
       "-Hlibssh2 -B\(binPath)",
       "-GXcode",
-      "-DVERBOSE=1",
       "-DCMAKE_TOOLCHAIN_FILE=\(toolchain)",
       "-DCMAKE_C_COMPILER=\(p.ccPath())",
       "-DCMAKE_OSX_ARCHITECTURES=\(arch)",
