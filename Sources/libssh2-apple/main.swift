@@ -90,7 +90,7 @@ for p in Config.platforms {
     try? sh("rm -rf \(libPath)")
     try? mkdir(libPath)
 
-    try print(
+    print(
       "Command: cmake",
       "-Hlibssh2 -B\(binPath)",
       "-GXcode",
@@ -117,6 +117,7 @@ for p in Config.platforms {
       "cmake",
       "-Hlibssh2 -B\(binPath)",
       "-GXcode",
+      "VERBOSE=1",
       "-DCMAKE_TOOLCHAIN_FILE=\(toolchain)",
       "-DCMAKE_C_COMPILER=\(p.ccPath())",
       "-DCMAKE_OSX_ARCHITECTURES=\(arch)",
