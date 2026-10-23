@@ -1,57 +1,94 @@
 name: CI
-
 on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
   push:
     tags:
-    - 'v*'
-
+      - 'v*'
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
 jobs:
+  # Rebuild iOS device and Simulator slices only: the pinned OpenSSL bundles lack tvOS/watchOS dependencies.
   build:
-    name: Building release assets
-    runs-on: macOS-latest
-
+    name: Building xcframeworks
+    runs-on: macos-26
+    timeout-minutes: 120
     steps:
-    - uses: actions/checkout@v2
-
-    - name: xcode-select
-      run: sudo xcode-select -s /Applications/Xcode.app
-
-    - name: install abimap
-      run: sudo pip3 install abimap
-
-    - name: build-libssh
-      run: swift run
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body_path: release.md
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset Dynamic
-      id: upload-release-asset-dynamic
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} 
-        asset_path: ./libssh2-dynamic.xcframework.zip
-        asset_name: libssh2-dynamic.xcframework.zip
-        asset_content_type: application/zip
-
-    - name: Upload Release Asset Static
-      id: upload-release-asset-static 
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }} 
-        asset_path: ./libssh2-static.xcframework.zip
-        asset_name: libssh2-static.xcframework.zip
-        asset_content_type: application/zip
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          df -h .
+      - name: Build frameworks
+        run: swift run --verbose
+      - name: Slices and checksums
+        run: |
+          for zip in libssh2-*.zip; do
+            sum=$(swift package compute-checksum "$zip")
+            echo "$sum  $zip"
+          done | tee checksums.txt
+          {
+            echo '| xcframework | slice | archs |'
+            echo '| --- | --- | --- |'
+            for kind in static dynamic; do
+              xcf="xcframeworks/$kind/libssh2.xcframework"
+              plutil -convert json -o - "$xcf/Info.plist" | jq -e '
+                [.AvailableLibraries[] | {id: .LibraryIdentifier, archs: (.SupportedArchitectures | sort)}] | sort_by(.id) ==
+                [{id: "ios-arm64", archs: ["arm64"]}, {id: "ios-arm64_x86_64-simulator", archs: ["arm64", "x86_64"]}]' >/dev/null
+              plutil -convert json -o - "$xcf/Info.plist" | jq -r \
+                '.AvailableLibraries[] | [.LibraryIdentifier, .LibraryPath, (.SupportedArchitectures | sort | join(" "))] | @tsv' \
+                | while IFS=$'\t' read -r slice lib expected; do
+                    bin="$xcf/$slice/$lib/libssh2"
+                    archs=$(lipo -archs "$bin")
+                    actual=$(echo "$archs" | tr ' ' '\n' | sort | paste -sd ' ' -)
+                    [ "$actual" = "$expected" ] || exit 1
+                    echo "| libssh2-$kind | $slice | $archs |"
+                    if [ "$kind" = dynamic ]; then
+                      otool -L "$bin" >&2
+                      if otool -L "$bin" | grep $'^\t' | grep -E '/opt/homebrew|/usr/local|/Users/runner'; then exit 1; fi
+                    fi
+                  done
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          du -sh bin lib frameworks xcframeworks .build
+          df -h .
+      - uses: actions/upload-artifact@v7
+        with:
+          name: xcframeworks
+          include-hidden-files: true
+          if-no-files-found: error
+          path: |
+            libssh2-*.zip
+            checksums.txt
+            release.md
+  release:
+    name: Publishing release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') && github.repository == 'holzschu/libssh2-apple'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: xcframeworks
+          path: dist
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              dist/libssh2-*.zip dist/checksums.txt
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --title "Release $GITHUB_REF_NAME" --notes-file dist/release.md \
+              dist/libssh2-*.zip dist/checksums.txt
+          fi
