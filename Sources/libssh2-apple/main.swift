@@ -13,7 +13,7 @@ enum Config {
   
   static let frameworkName = "libssh2"
   
-  static let platforms: [Platform] = Platform.allCases
+  static let platforms: [Platform] = [.iPhoneOS, .iPhoneSimulator]
 }
 
 extension Platform {
@@ -32,11 +32,17 @@ try? sh("rm -rf libssh2")
 try sh("git clone --depth 1 \(Config.libssh2Origin) --branch \(Config.libssh2Tag)")
 
 try download(url: Config.opensslLibsURL)
+guard try sha(path: "openssl-libs.zip") == "6d7fb9a1caf86bb8084ade27d801fc87d107dc9efc1bf8855f1bf083ebde2b61" else {
+  fatalError("OpenSSL libraries checksum mismatch")
+}
 try? sh("rm -rf openssl")
 try? sh("mkdir -p openssl")
 try sh("unzip openssl-libs.zip -d openssl")
 
 try download(url: Config.opensslFrameworksURL)
+guard try sha(path: "openssl-dynamic.frameworks.zip") == "8a8de08e6ac9d1f6cb28e0c7e0c988ca2bb3a4de161a53b252a93d09d2af697a" else {
+  fatalError("OpenSSL frameworks checksum mismatch")
+}
 try? sh("rm -rf openssl-frameworks")
 try? sh("mkdir -p openssl-frameworks")
 try sh("unzip openssl-dynamic.frameworks.zip -d openssl-frameworks")
@@ -52,19 +58,12 @@ var dynamicFrameworkPaths: [String] = []
 var staticFrameworkPaths: [String] = []
 
 for p in Config.platforms {
-  let ldflags = "-fembed-bitcode"
-  let cflags = "-fembed-bitcode"
-  let cppflags = "-fembed-bitcode"
-
   var env = try [
     "PATH": ProcessInfo.processInfo.environment["PATH"] ?? "",
     "APPLE_PLATFORM": p.sdk,
     "ZLIB_ROOT": "\(p.sdkPath())/usr",
     "APPLE_SDK_PATH": p.sdkPath(),
-    "SECOND_FIND_ROOT_PATH": "\(opensslLibsRoot + p.name)/openssl",
-    "LDFLAGS": ldflags,
-    "CFLAGS": cflags,
-    "CPPFLAGS": cppflags
+    "SECOND_FIND_ROOT_PATH": "\(opensslLibsRoot + p.name)/openssl"
   ]
 
   let frameworkDynamicPath = "frameworks/dynamic/\(p.name)/\(Config.frameworkName).framework"
@@ -72,14 +71,16 @@ for p in Config.platforms {
   dynamicFrameworkPaths.append(frameworkDynamicPath)
   staticFrameworkPaths.append(frameworkStaticPath)
   
-  for arch in p.archs {
+  // The pinned OpenSSL iOS framework contains arm64 only.
+  let archs: [Platform.Arch] = p == .iPhoneOS ? [.arm64] : p.archs
+  for arch in archs {
     
     print(env)
     print(arch)
     
     if p == .Catalyst {
-      env["LDFLAGS"] = "\(ldflags) -target \(arch)-apple-ios14.0-macabi"
-      env["CFLAGS"] = "\(cflags) -target \(arch)-apple-ios14.0-macabi"
+      env["LDFLAGS"] = "-target \(arch)-apple-ios14.0-macabi"
+      env["CFLAGS"] = "-target \(arch)-apple-ios14.0-macabi"
     }
     
     let libPath = "lib/\(p.name)-\(arch).sdk"
@@ -105,6 +106,7 @@ for p in Config.platforms {
       "-DCMAKE_SYSTEM_NAME=Darwin", 
       "-DCMAKE_SYSTEM_PROCESSOR=\(arch)",
       "-DCMAKE_POLICY_DEFAULT_CMP0074=NEW",
+      "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
 //      "-DCMAKE_C_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0 -isystem \(try p.sdkPath())/System/iOSSupport/usr/include -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/System/Library/Frameworks\"",
 //      "-DCMAKE_CXX_FLAGS=\"-target x86_64-apple-ios13.0-macabi -mios-version-min=13.0\"",
 //      "-DCMAKE_LDFLAGS=\"-target x86_64-apple-ios13.0-macabi  -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/maccatalyst  -L/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/usr/lib -iframework /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.1.sdk/System/iOSSupport/System/Library/Frameworks \"",
@@ -136,7 +138,6 @@ for p in Config.platforms {
     try sh(
       "ld",
       "\(binPath)/obj/*.o",
-      "-bitcode_bundle",
       "-dylib",
       "-lSystem",
       "-lz",
@@ -144,7 +145,9 @@ for p in Config.platforms {
       "-framework Foundation",
       "-framework openssl",
       "-arch \(arch)",
-      "-\(p.plistMinSDKVersionName) \(p.deploymentTarget)",
+      p == .iPhoneSimulator
+        ? "-platform_version ios-simulator \(p.deploymentTarget) \(try p.sdkVersion())"
+        : "-\(p.plistMinSDKVersionName) \(p.deploymentTarget)",
       "-syslibroot \(p.sdkPath())",
       "-compatibility_version 1.0.0",
       "-current_version 1.0.0",
@@ -170,7 +173,7 @@ for p in Config.platforms {
   }
   
   guard
-    let arch = p.archs.first
+    let arch = archs.first
   else {
     continue
   }
@@ -195,13 +198,13 @@ for p in Config.platforms {
     try write(content: moduleMap, atPath: "\(path)/Modules/module.modulemap")
   }
   
-  let aFiles = p.archs.map { arch -> String in
+  let aFiles = archs.map { arch -> String in
     "bin/\(p.name)-\(arch).sdk/tmp/*.a"
   }
   
   try sh("libtool -static -o \(frameworkStaticPath)/\(Config.frameworkName) \(aFiles.joined(separator: " "))")
   
-  let dylibFiles = p.archs.map { arch -> String in
+  let dylibFiles = archs.map { arch -> String in
     "bin/\(p.name)-\(arch).sdk/\(Config.frameworkName)"
   }
   
